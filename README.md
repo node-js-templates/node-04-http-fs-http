@@ -1,60 +1,50 @@
-## Description
+## What you are building
 
-  
-- An HTTP server is created using the `http.createServer()` method in `./src/app.js`.
+A small HTTP server with two jobs: do arithmetic, and read or write a text file.
 
-- The server listens for requests from clients in `./index.js`.
+The tests in [src/__tests__](./src/__tests__) check the status codes and the response text exactly, so the messages below are part of the task. Leave that folder as it is.
 
-- The request URL is parsed with `url.parse(req.url, true)`. The path is `q.pathname`. The parameters are `q.query`, the object produced by the `true` argument.
+## Where the code goes
 
-- Checks run in this order: HTTP method, path, `operation`, parameters, then arithmetic or the file.
+Create the server with `http.createServer()` in [src/app.js](./src/app.js) and export it with `module.exports`. The tests import that export.
 
-- The server accepts only `GET`. Any other method receives `"Method not allowed"` and a status code of `405`.
+[index.js](./index.js) is already written. It starts the server.
 
-- The path is matched exactly, including letter case and a trailing slash. `/calc/` and `/Calc` do not match `/calc`. `operation` is matched the same way: `Add` does not match `add`.
+## How a request is handled
 
-- If the request path is `/calc`, the calculator operation is performed.
+Parse the URL with `url.parse(req.url, true)`.
 
-  - The parameters `operation`, `a`, and `b` are read from `q.query`. Each parameter must be a single string.
+- The path is `pathname`.
+- The parameters are `query`. The second argument, `true`, is what turns the query string into an object.
 
-  - `operation` is one of `add`, `sub`, `mul`, or `div`. A missing or different value receives `"Operation unknown"` and a status code of `400`.
+Then check, in this order:
 
-  - `a` and `b` are required. A value is accepted when it is a string, it is not blank after trimming, and `Number` of that string is finite. An empty value, spaces only, `Infinity`, and a non-numeric value receive `"Invalid arguments"` and a status code of `400`.
+1. HTTP method
+2. Path
+3. `operation`
+4. Parameters
+5. The arithmetic, or the file
 
-  - The accepted numbers are added, subtracted, multiplied, or divided. The body is the ordinary decimal text of the result, such as `5`, `-19`, or `0.5`.
+Only `GET` is accepted. Any other method gets status `405` and the text `Method not allowed`.
 
-  - Division by zero, including `0/0`, receives `"Division by zero"` and a status code of `400`. Zero is a valid operand for `add`, `sub`, and `mul`.
+The path has to match exactly, including capital letters and a slash at the end. `/calc/` and `/Calc` are not `/calc`. `operation` works the same way: `Add` is not `add`.
 
-  - A successful result is sent with a status code of `200`.
+Every response, including an error, sets `Content-Type` to exactly `text/html`. The body is plain text: the result, or one error message.
 
-- If the request path is `/fs`, the file handling operation is performed.
+## Calculator, `GET /calc`
 
-  - The parameters `operation`, `filename`, and `text` are read from `q.query`. Each parameter must be a single string.
+Read `operation`, `a`, and `b` from the query. Each value is one string.
 
-  - `operation` is `create` or `read`. A missing or different value receives `"Operation unknown"` and a status code of `400`. This check comes before the parameter and file checks.
+`operation` is one of `add`, `sub`, `mul`, or `div`. If it is missing or anything else, answer with `400` and `Operation unknown`.
 
-  - `filename` is required for `create` and `read`. `text` is required for `create` and may be an empty string. A missing `filename`, a missing `text` on `create`, or a parameter that is not a single string receives `"Invalid arguments"` and a status code of `400`.
+`a` and `b` are both required. A value is usable when it is a string, it is not blank after trimming, and `Number` of that string is a finite number. An empty value, spaces only, `Infinity`, or a word gets `400` and `Invalid arguments`.
 
-  - A filename is relative to the process working directory. The file is read and written as UTF-8. The response is sent after that operation has finished.
+A successful result is status `200`. The body is the ordinary decimal text of the number, such as `5`, `-19`, or `0.5`.
 
-  - `create` writes `text` into `filename`. A new file receives `{filename} was created` and a status code of `201`. An existing file is overwritten and receives `{filename} was updated` with a status code of `200`.
+Dividing by zero, including `0/0`, gets `400` and `Division by zero`. Zero is a normal operand for `add`, `sub`, and `mul`.
 
-  - `read` returns the file contents with a status code of `200`. A missing file receives `"File not found"` and a status code of `404`.
-
-- If the request path does not match `/calc` or `/fs`, the server responds with `"Not found"` and a status code of `404`.
-
-- Every response, including an error, sets the `Content-Type` header to exactly `text/html`.
-
-- The response body is the operation result or the error message.
-
-- The web server is exported for use in other modules using `module.exports`.
-
-  
-
-## Functional examples
-
-| **Request** | **Response : Status** | **Response : Text** |
-|--|--|--|
+| Request | Status | Text |
+|---|---|---|
 | /calc?operation=add&a=2&b=3 | 200 | 5 |
 | /calc?operation=add&a=-22&b=3 | 200 | -19 |
 | /calc?operation=sub&a=2&b=3 | 200 | -1 |
@@ -69,8 +59,24 @@
 | /calc?operation=add&a=abc&b=1 | 400 | Invalid arguments |
 | /calc?a=2&b=3 | 400 | Operation unknown |
 | /calc?operation=Add&a=2&b=3 | 400 | Operation unknown |
-| /calc/ | 404 | Not found |
-| POST /calc?operation=add&a=1&b=2 | 405 | Method not allowed |
+
+## Files, `GET /fs`
+
+Read `operation`, `filename`, and `text` from the query. Each value is one string.
+
+`operation` is `create` or `read`. Check this before the other parameters and before touching the disk. Anything else gets `400` and `Operation unknown`.
+
+`filename` is required for both operations. `text` is required for `create`, and it may be an empty string. A missing `filename`, a missing `text` on `create`, or a value that is not a single string gets `400` and `Invalid arguments`. A `create` without `text` does not create the file.
+
+The filename is relative to the process working directory. Read and write the file as UTF-8, and send the response after that work has finished.
+
+- A new file gets `201` and `{filename} was created`. The file then contains `text`, even when `text` is empty.
+- An existing file is overwritten. The response is `200` and `{filename} was updated`.
+- A successful read gets `200` and the file contents.
+- A missing file gets `404` and `File not found`.
+
+| Request | Status | Text |
+|---|---|---|
 | /fs?operation=create&filename=tf.txt&text=23 | 201 | tf.txt was created |
 | /fs?operation=create&filename=aloha.txt&text=hello | 201 | aloha.txt was created |
 | /fs?operation=create&filename=empty.txt&text= | 201 | empty.txt was created |
@@ -79,11 +85,19 @@
 | /fs?operation=read&filename=aloha.txt | 200 | hello |
 | /fs?operation=read&filename=qq.txt | 404 | File not found |
 | /fs?operation=read | 400 | Invalid arguments |
-| /calc?operation=read&filename=qq.txt | 400 | Operation unknown |
 | /fs?operation=add&a=3&b=33 | 400 | Operation unknown |
-| /psss | 404 | Not found |
 
-After a successful `create`, the file in the working directory contains `text`, including when `text` is empty. A `create` without `text` does not create the file.
+## Other paths
+
+A path other than `/calc` or `/fs` gets `404` and `Not found`.
+
+| Request | Status | Text |
+|---|---|---|
+| /calc/ | 404 | Not found |
+| /psss | 404 | Not found |
+| /calc?operation=read&filename=qq.txt | 400 | Operation unknown |
+| POST /calc?operation=add&a=1&b=2 | 405 | Method not allowed |
 
 ## Running tests
-Run `npm i` for installing dependencies, and then `npm run test` for running tests.  Please refrain from making any changes in the [tests](./src/__tests__) folder.
+
+Install the dependencies with `npm i`, then run `npm test`.
