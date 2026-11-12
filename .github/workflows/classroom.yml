@@ -1,16 +1,24 @@
-name: GitHub Classroom Workflow
+name: Tests
 
-on: [push]
+on:
+  push
 
 permissions:
-  checks: write
-  actions: read
   contents: read
 
 jobs:
-  build:
-    name: Autograding
+  test:
+    name: Test
+    # The push that creates a repository from this template has no parent
+    # commit and is the first run in that repository. It is not a submission.
+    if: ${{ !(github.run_number == 1 && github.event.before == '0000000000000000000000000000000000000000') }}
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v2
-      - uses: education/autograding@v1
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm test
